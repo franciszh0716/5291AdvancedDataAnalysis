@@ -74,7 +74,16 @@ Hastie, et al (2009): The Elements of Statistical Learning: Data Mining, Inferen
 Introduction Time Series and Forecasting   Brockwell & Davis.    Springer-Verlag  
 The following are also useful references 
 
-Miller, R. Survival Analysis. 1981, Wiley
-McCullagh and Nedler.   Generalized Linear Models. Chapman/Hall.
-Hosmer and Lemshow. Applied Logistic Regression, Wiley
-Neter, Wasserman and Kutner. Applied Linear
+The following are also useful references 
+
+Miller, R. *Survival Analysis*. 1981, Wiley
+
+
+McCullagh and Nedler. *Generalized Linear Models*. Chapman/Hall.
+
+
+Hosmer and Lemshow. *Applied Logistic Regression*, Wiley
+
+
+Neter, Wasserman and Kutner. *Applied Linear Statistical Models*
+
