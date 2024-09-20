@@ -1,0 +1,132 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set 2"
+author: "Francis Zhang"
+date: "September 20, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+Consider the ToothGrowth data in R, concerning the Effect of Vitamin C on Tooth Growth in Guinea Pigs.
+
+1.Ignore the data for Dose=2.0, and determine whether there is a significant difference in the mean “len” between the two groups (i.e., OJ vs VC), combining the data for Doses =0.5 and 1.0: ​
+
+a.Using a parametric procedure​
+
+b.Using a non-parametric procedure​
+
+c.Discuss the assumption underlying  each of the analyses, their validity, and any remedial measures to be taken.​
+
+## Overview
+
+I will be taking the ToothGrowth data and do a basic EDA on the data, then I will use t.test as a parametric procedure​ and wilcox.test as a non-parametric procedure​ to perform hypothesis testing for the effectiveness of the supplement types on tooth growth length under the respective dose levels. And discuss the assumption underlying each of the analyses, their validity, and any remedial measures to be taken.​
+
+## Solution
+
+### Basic EDA
+```{r EDA1}
+# Load the ToothGrowth data
+data("ToothGrowth")
+head(ToothGrowth)
+```
+
+```{r EDA2}
+str(ToothGrowth)
+```
+
+The data has 60 rows and 3 columns
+
+```{r EDA3}
+unique(ToothGrowth$dose)
+```
+
+There are three unique values for dose.
+
+```{r EDA4}
+summary(ToothGrowth)
+```
+
+Plotting box plot based on supplement type and dose
+
+```{r EDA5}
+ToothGrowth$dose <- factor(ToothGrowth$dose)
+library(ggplot2)
+
+ggplot(ToothGrowth, aes(x = dose, y = len, fill = supp)) +
+  geom_boxplot() +
+  ggtitle("Length of tooth growth based on supplement type and dose") + 
+  theme_classic()
+```
+
+```{r EDA 6}
+hist(ToothGrowth$len, 
+     main = "Distribution of Tooth Length",
+     xlab = "Tooth Length",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black")
+```
+
+### 1. Filter Data for Doses 0.5 and 1.0, Exclude Dose 2.0
+```{r filtered-ToothGrowth}
+# Filter the data for doses 0.5 and 1.0, excluding dose 2.0
+filtered_data <- subset(ToothGrowth, dose != 2.0)
+filtered_data
+```
+
+#### a. Using a parametric procedure​
+```{r t-test}
+# Perform a t-test for the two supplement groups (OJ vs VC)
+t_test_result <- t.test(len ~ supp, data = filtered_data)
+
+# View the result
+t_test_result
+```
+#### b. Using a non-parametric procedure​
+```{r Wilcoxon-Rank-Sum-test}
+# Perform a Wilcoxon Rank-Sum test
+wilcox_test_result <- wilcox.test(len ~ supp, data = filtered_data)
+
+# View the result
+wilcox_test_result
+```
+
+#### c. Discussion of Assumptions for Each Analysis
+
+a. Parametric Procedure (t-test)
+
+	•	Assumptions:
+	1.	Normality: The t-test assumes that the distribution of the dependent variable (in this case, “len”) within each group (OJ and VC) follows a normal distribution.
+	2.	Equal Variances: In a standard t-test (not Welch’s t-test), it is assumed that the variances in the two groups are equal (homogeneity of variances). However, in this case, you used Welch’s t-test, which does not assume equal variances and is more robust when the variances are unequal.
+	3.	Independence: The observations within each group should be independent of one another.
+	•	Validity:
+	1.	The normality assumption can be checked using Q-Q plots or formal normality tests (e.g., the Shapiro-Wilk test). If the data significantly deviates from normality, the validity of the t-test may be compromised.
+	2.	Welch’s t-test is robust to unequal variances, so we don’t need to worry about the equal variances assumption in this case.
+	3.	Independence is assumed based on the experimental design, which should ensure that each guinea pig is independent of others in terms of their tooth growth.
+	•	Remedial Measures:
+	1.	If the normality assumption is violated, you could either transform the data (e.g., log or square-root transformation) to make it more normally distributed or use a non-parametric test (like the Wilcoxon Rank-Sum test, as performed).
+	2.	Since Welch’s t-test handles unequal variances, no further action is needed regarding this assumption.
+
+b. Non-parametric Procedure (Wilcoxon Rank-Sum Test)
+
+	•	Assumptions:
+	1.	Independence: The Wilcoxon Rank-Sum test assumes that the observations in each group are independent.
+	2.	Ordinality or Continuous Data: The test assumes that the dependent variable (tooth length) can be meaningfully ranked.
+	3.	No Assumption of Normality: Unlike the t-test, the Wilcoxon test does not require the data to follow a normal distribution, making it more robust in situations where normality is questionable.
+	•	Validity:
+	1.	The independence assumption holds if the guinea pigs were randomly assigned to the two supplement groups.
+	2.	Ties (equal values of tooth length between groups) can lead to the warning that you encountered. This does not invalidate the test but indicates that an exact p-value cannot be computed due to the presence of tied ranks, and an approximate method is used instead.
+	3.	Since the Wilcoxon test does not assume normality, it is valid even if the normality assumption for the t-test is violated.
+	•	Remedial Measures:
+	1.	The ties warning is a result of identical tooth length values in both groups (e.g., both OJ and VC having a length of 16.5). This can be ignored in most cases because the approximation used is usually sufficient, especially with larger sample sizes.
+	2.	If the number of ties is large and you are concerned about the approximation, you can either use a different non-parametric test or report the limitations in the interpretation of results.
+
+Summary:
+
+	•	The t-test is valid if the data is normally distributed (or approximately so), and since you used Welch’s t-test, you don’t need to worry about the assumption of equal variances.
+	•	The Wilcoxon Rank-Sum test is more robust when normality is violated and is a good alternative if the normality assumption of the t-test does not hold.
+	•	In both cases, independence of observations is key, and the warning in the Wilcoxon test regarding ties can be considered minor if the sample size is adequate.
