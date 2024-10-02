@@ -1,0 +1,159 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set 3"
+author: "Francis Zhang"
+date: "September 20, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+1.Fit a multiple linear regression model to predict medv (median value of owner-occupied homes in $1000s) using the following set of predictors:
+
+- crim per capita crime rate by town.
+
+- zn proportion of residential land zoned for lots over 25,000 sq.ft.
+
+- indus proportion of non-retail business acres per town.
+
+- nox nitrogen oxides concentration (parts per 10 million).
+
+- rm average number of rooms per dwelling.
+
+- age proportion of owner-occupied units built prior to 1940.
+
+2.State and assess the validity of  the underlying assumptions, and suggest remedial measures in case of violations of any of the underlying assumptions
+
+- Linearity/functional form
+
+- Normality
+
+- Homoscedasticity
+
+- Uncorrelated error
+
+3.Repeat (1) using Least Median of Squares Regression and compare the results with those obtained in (1).
+
+## Solution
+
+### Question 1
+
+```{r 1}
+library(MASS)
+names(Boston)
+head(Boston)
+lm_model <- lm(medv ~ crim + zn + indus + nox + rm + age, Boston)
+summary(lm_model)
+```
+
+Our regression model is $medv=-20.150-0.188crim+0.014zn-0.123indus-3.248nox+7.611rm-0.021age$.
+
+### Question 2
+
+#### a. Linearity / Functional Form
+
+```{r 2a}
+plot(lm_model, which = 1)
+```
+
+Assumption: The relationship between the dependent variable ($medv$) and each predictor is assumed to be linear.
+
+Test: A Residuals vs Fitted Plot is used to assess linearity. If the plot shows a random scatter of points without a clear pattern, the linearity assumption holds. If a pattern (such as a curve) appears, the assumption is violated. In this case, the residuals versus fitted plot indicates some potential non-linearity.
+
+Remedial Measure: Add polynomial terms or apply transformations to non-linear predictors.
+
+#### b. Normality of Residuals
+
+```{r 2b}
+plot(lm_model, which = 2)
+shapiro.test(residuals(lm_model))
+```
+
+Assumption: The residuals (errors) of the model should be normally distributed.
+
+Test: A Q-Q Plot and Shapiro-Wilk Test can be used to assess normality. The Q-Q plot compares the distribution of residuals to a theoretical normal distribution. In this Q-Q plot, the residuals deviate from the diagonal, and the Shapiro-Wilk test yields a very small p-value (< 2.2e-16), indicating a violation of normality.
+
+Remedial Measure: Transforming the dependent variable (e.g., log transformation) or using robust regression methods like LMS.
+
+#### c. Homoscedasticity
+
+```{r 2c}
+library(lmtest)
+bptest(lm_model)
+plot(lm_model, which = 3)
+```
+
+Assumption: The variance of the residuals should remain constant across all levels of the fitted values.
+
+Test: The Breusch-Pagan Test and the Scale-Location Plot are used to test this. In this case, the Breusch-Pagan test gives a p-value of 0.001825, indicating a violation of homoscedasticity (heteroscedasticity is present).
+
+Remedial Measure: Apply transformations (log/square-root) to the response variable, or use Weighted Least Squares (WLS) regression.
+
+#### d. Uncorrelated Errors
+
+```{r 2d}
+library(lmtest)
+dwtest(lm_model)
+```
+
+Assumption: The residuals should not be correlated with each other. Correlated residuals typically indicate that important predictors have been omitted from the model or that the data has some structure (e.g., time series or spatial structure) that has not been accounted for.
+
+Test: The Durbin-Watson Test is used to check for autocorrelation. In this case, the Durbin-Watson statistic is 0.74375 with a very low p-value (< 2.2e-16), indicating significant positive autocorrelation in the residuals.
+
+Remedial Measure: Use Generalized Estimating Equations (GEE) to account for correlated residuals or include lagged predictors.
+
+### Question 3
+
+```{r 3a}
+lms_model <-
+  lqs(medv ~ crim + zn + indus + nox + rm + age, Boston, method = "lms")
+
+lms_model
+```
+
+```{r 3b}
+# Coefficients of the OLS model
+coef(lm_model)
+
+# Coefficients of the LMS model
+coef(lms_model)
+
+# Plot residuals for OLS vs LMS
+par(mfrow = c(1, 2))
+plot(lm_model, which = 1, main = "OLS Residuals")
+plot(residuals(lms_model), main = "LMS Residuals")
+```
+Comparison Between OLS and LMS Regression
+
+Explanation:
+The Least Median of Squares (LMS) regression minimizes the median of squared residuals, making it more robust to outliers compared to Ordinary Least Squares (OLS), which minimizes the sum of squared residuals. This robustness is especially beneficial in datasets that might contain outliers or influential points that could skew the OLS results.
+
+a. Coefficients Comparison:
+
+	•	The coefficients in the OLS and LMS models can differ significantly if outliers are present. In the provided results:
+	•	The LMS model shows a larger intercept compared to OLS , and some predictors like rm have higher coefficients in LMS than in OLS.
+	•	Predictors like nox have coefficients that are substantially different between the two models, suggesting that LMS is handling influential data points differently from OLS.
+
+b. Residuals Comparison:
+
+	•	The residuals plot comparison between OLS and LMS (as shown in the problem set) highlights that LMS tends to produce more stable residuals, especially in the presence of outliers.
+	•	OLS Residuals: The residual plot for OLS shows some larger deviations, indicating that OLS might be affected by extreme values.
+	•	LMS Residuals: The residuals in LMS tend to be more concentrated around zero, indicating that LMS is less sensitive to outliers.
+
+c. Impact of Outliers:
+
+	•	OLS Sensitivity: OLS can be heavily influenced by outliers, leading to biased estimates and increased variance in predictions. If the dataset contains outliers or highly influential points, OLS may not perform well.
+	•	LMS Robustness: LMS is more robust to outliers, as it focuses on minimizing the median of squared residuals. This makes LMS a better choice in situations where the data may contain anomalies that could unduly influence the model.
+
+d. Fit of the Models:
+
+	•	OLS Fit: The R-squared value from OLS is typically higher because OLS optimizes for the sum of squared residuals. However, a higher R-squared does not always indicate a better model when outliers are present.
+	•	LMS Fit: LMS does not provide an R-squared value, but it often gives a better representation of the central trend in the data when outliers exist.
+
+e. Conclusion:
+
+	•	Use of OLS: OLS is appropriate when the data is clean (free of outliers), and the assumptions of linear regression (normality, homoscedasticity) are met.
+	•	Use of LMS: LMS should be used when there are concerns about outliers or influential data points that could unduly impact the OLS results. LMS produces more robust estimates, especially in the presence of data that violates some assumptions of OLS.
