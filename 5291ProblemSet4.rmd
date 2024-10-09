@@ -1,0 +1,190 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set 4"
+author: "Francis Zhang"
+date: "October 9, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+1.Perform a multiple linear regression model of 'bwt' birth weight in grams on the explanatory variables:
+
+- 'age' mother's age in years
+
+- 'lwt' mother's weight in pounds at last menstrual period
+
+- 'race' mother's race ('0' = white, '1' = other)
+
+- 'smoke' smoking status during pregnancy
+
+- 'ptl' number of previous premature labours
+
+- 'ht' history of hypertension
+
+- 'ui' presence of uterine irritability
+
+- 'ftv' number of physician visits during the first trimeste
+
+i) Investigate whether there is any multicollinearity
+
+ii) Run a ridge regression analysis and compare the results with the OLS results
+
+2.Compare models selected using LASSO and a stepwise procedure to predict 'bwt' birth weight in grams using the above set of predictors.
+
+3.For the procedures listed in Table 1 next page, give appropriate ranks with respect to the listed attributes: 1 = Good, 2 = Fair, 3= Poor. Given supporting reference from the literature, if you wish.
+
+## Solution
+
+### Question 1
+
+### Overview of the Dataset
+
+```{r 1a}
+library(MASS)
+names(birthwt)
+head(birthwt)
+summary(birthwt)
+dim(birthwt)
+# normalize ‘race’ column
+birthwt$race <- ifelse(birthwt$race == 1, 0, 1)
+head(birthwt)
+summary(birthwt)
+dim(birthwt)
+```
+
+### Develop models
+```{r 1b}
+lm_model <- lm(bwt ~ age + lwt + race + smoke + ptl + ht + ui + ftv,
+               data = birthwt)
+summary(lm_model)
+```
+
+### i) Multicollinearity Check
+
+- Multicollinearity can inflate variance, making coefficients unstable and difficult to interpret. To investigate multicollinearity, we use the Variance Inflation Factor (VIF). VIF values above 5-10 may indicate problematic multicollinearity.
+
+```{r 1c}
+lm_model <- lm(bwt ~ age + lwt + race + smoke + ptl + ht + ui + ftv,
+               data = birthwt)
+summary(lm_model)
+
+library(car)
+vif_values <- vif(lm_model)
+vif_values
+```
+
+The VIF values obtained are all below 2, suggesting that multicollinearity is not a serious issue in this model.
+
+### ii) Ridge Regression Analysis
+
+- Ridge regression adds a penalty to the regression model based on the sum of the squared coefficients, which helps manage multicollinearity.
+
+- We can compare the coefficients and interpret how Ridge Regression handles multicollinearity differently from OLS.
+
+```{r 1d}
+library(glmnet)
+
+x <- model.matrix(bwt ~ age + lwt + race + smoke + ptl + ht + ui + ftv,
+                  data = birthwt)[, -1]
+y <- birthwt$bwt
+
+ridge_model <- glmnet(x, y, alpha = 0)
+
+cv_ridge <- cv.glmnet(x, y, alpha = 0)
+best_lambda <- cv_ridge$lambda.min
+ridge_coefs <- predict(ridge_model, s = best_lambda, type = "coefficients")
+
+print(ridge_coefs)
+print(coef(lm_model))
+```
+
+Ridge regression coefficients are generally closer to zero than those from OLS, which is expected due to the penalty applied on large coefficients to handle multicollinearity. Notably, the absolute values for smoke and race are reduced in Ridge, which suggests that Ridge regression is dampening their influence due to their correlation with other predictors. 
+
+In summary, Ridge regression helps stabilize the coefficients by shrinking them towards zero, particularly useful in the presence of mild multicollinearity, as it reduces the variance of coefficients without performing variable selection.
+
+## Question 2
+
+### LASSO
+
+- LASSO regression is helpful for variable selection as it forces some coefficients to exactly zero, effectively selecting a subset of predictors.
+
+```{r 2a}
+lasso_model <- glmnet(x, y, alpha = 1)  # alpha = 1 for lasso
+
+cv_lasso <- cv.glmnet(x, y, alpha = 1)
+best_lambda_lasso <- cv_lasso$lambda.min
+lasso_coefs <- predict(lasso_model, s = best_lambda_lasso,
+                       type = "coefficients")
+
+print(lasso_coefs)
+```
+
+### Stepwise Selection
+
+- We can use stepwise selection based on AIC (Akaike Information Criterion) for feature selection.
+
+```{r 2b}
+stepwise_model <- step(lm_model, direction = "both", trace = FALSE)
+
+summary(stepwise_model)
+```
+
+### Comparison of Models (LASSO vs Stepwise)
+
+LASSO and Stepwise selection both produce models that simplify prediction, but they do so differently. LASSO promotes model sparsity by penalizing and often eliminating weaker predictors, which can improve generalization to new data. Stepwise selection, driven by AIC, tends to retain a larger number of predictors to optimize model fit, sometimes including variables with marginal effects. Thus, LASSO’s model may be more robust to variability, while Stepwise may provide slightly better in-sample fit due to its inclusion of additional predictors.
+
+Overall, LASSO’s tendency to favor simpler models may improve generalizability to new data, while Stepwise selection’s focus on AIC may provide a slightly better fit for the training data by retaining more predictors.
+
+## Question 3
+
+| Attribute                          | OLS  | Ridge | LASSO | Elastic Net |
+|------------------------------------|------|-------|-------|-------------|
+| **Performance when p >> n**        | 3    | 2     | 1     | 1           |
+| **Performance under multicollinearity** | 3 | 1 | 2 | 1           |
+| **Unbiased estimation**            | 1    | 3     | 3     | 3           |
+| **Model selection**                | 3    | 3     | 1     | 1           |
+| **Simplicity: Computation, \newline Inference, Interpretation** | 1 | 2 | 2 | 2       |
+
+Explanation:
+
+1.Performance when p >> n (High-dimensional Data):
+
+- OLS (3): OLS performs poorly when the number of predictors (p) is greater than the number of observations (n) as it overfits and leads to unstable estimates.
+
+- Ridge (2): Ridge regression handles high-dimensional data better than OLS by shrinking coefficients, but it does not perform variable selection.
+	
+- LASSO (1) and Elastic Net (1): Both are better suited for high-dimensional data. LASSO performs automatic variable selection, setting some coefficients to zero, and Elastic Net combines Ridge and LASSO properties, making it versatile in high dimensions.
+	
+2.Performance under Multicollinearity:
+	
+- OLS (3): OLS is sensitive to multicollinearity, which can inflate variance and destabilize coefficients.
+	
+- Ridge (1): Ridge regression is highly effective for handling multicollinearity as it applies a penalty that reduces coefficient variance.
+	
+- LASSO (2): LASSO can handle multicollinearity by selecting a subset of predictors, but it is less effective than Ridge at reducing the influence of multicollinear predictors.
+	
+- Elastic Net (1): Elastic Net performs well with multicollinear data because it combines LASSO’s variable selection with Ridge’s penalty for correlated predictors.
+	
+3.Unbiased Estimation:
+	
+- OLS (1): OLS provides unbiased estimates under the assumption that there is no multicollinearity and no omitted variable bias.
+	
+- Ridge (3), LASSO (3), Elastic Net (3): These methods introduce bias by shrinking coefficients. This bias-variance trade-off can improve prediction accuracy but sacrifices unbiased estimation.
+	
+4.Model Selection:
+	
+- OLS (3): OLS includes all predictors without any form of selection, which can lead to overfitting.
+	
+- Ridge (3): While Ridge regression shrinks coefficients, it does not perform variable selection (does not set coefficients to zero).
+	
+- LASSO (1) and Elastic Net (1): LASSO performs automatic variable selection by setting some coefficients to zero, and Elastic Net combines this with Ridge’s stability, making both effective for model selection.
+	
+5.Simplicity: Computation, Inference, Interpretation:
+	
+- OLS (1): OLS is straightforward to compute and interpret as it does not involve any penalty terms.
+	
+- Ridge (2), LASSO (2), Elastic Net (2): These methods add complexity due to the need for cross-validation to choose the optimal penalty parameters. Interpretation can also be more challenging because of shrinkage and variable selection effects.
