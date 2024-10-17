@@ -1,0 +1,194 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set ANOVA 1"
+author: "Francis Zhang"
+date: "October 17, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+Consider the ChickWeight data in R. The body weights of the chicks were measured at birth (i.e., time=0) and every second day thereafter until Day 20.  They were also measured on Day 21.  There were four groups of chicks on different protein diets.
+
+1.Determine whether there is a significant difference in the mean weights of the four groups on Day 20:
+
+a)Without adjusting for Birth Weight
+
+b)Adjusting for Birth Weight. Give the LS Means (i.e., adjusted for Birth Weight).
+
+c)For the model in part b), check the validity of your assumptions, including parallelism. Suggest measures that you would take if the assumptions are not satisfied.
+
+2.For 1a), perform pairwise comparisons among the 4 groups using each of the following, and comment on the results
+
+a)Bonferroni method
+
+b)Tukey method
+
+3.Repeat 1a) using the Kruskal-Wallis test
+
+## Solution
+
+### Question 1
+
+### Data Preparation
+
+```{r 1a}
+# Load the ChickWeight dataset
+data("ChickWeight")
+head(ChickWeight)
+
+# Filter data for Day 20 only
+day20_data <- subset(ChickWeight, Time == 20)
+day20_data
+```
+
+### Part (a) Without Adjusting for Birth Weight
+
+```{r 1b}
+# Perform ANOVA
+anova_no_adjust <- aov(weight ~ Diet, data = day20_data)
+
+# Summary of the ANOVA
+summary(anova_no_adjust)
+```
+
+The p-value from the ANOVA is far less than 0.05, even less than 0.01, closer to 0.001. So, it indicates that there is a significant difference in mean weights among the four diet groups on Day 20.
+
+### Part (b) Adjusting for Birth Weight
+
+```{r 1c}
+# Get birth weight data for each chick at time = 0
+birth_weight <- ChickWeight[ChickWeight$Time == 0, c("Chick", "weight")]
+colnames(birth_weight)[2] <- "birth_weight"
+
+# Merge birth weight with Day 20 data
+day20_data <- merge(day20_data, birth_weight, by = "Chick")
+
+# Perform ANCOVA
+ancova_model <- aov(weight ~ Diet + birth_weight, data = day20_data)
+
+# Summary of the ANCOVA
+summary(ancova_model)
+
+# Load the emmeans package for LS Means
+library(emmeans)
+
+# Calculate LS Means for Diet groups adjusted for birth weight
+lsmeans <- emmeans(ancova_model, ~ Diet)
+lsmeans
+```
+The ANCOVA results indicate that the type of diet has a significant effect on chick weight on Day 20 (p = 0.00261), suggesting that mean weights differ across the four diet groups. However, birth weight does not have a statistically significant effect on Day 20 weight (p = 0.16447), implying that initial weight differences among chicks do not significantly impact the weight outcomes once diet is considered in the model.
+
+The LS Means (Least Squares Means), adjusted for birth weight, reveal the following estimated mean weights for each diet group: Diet 1 has a mean weight of 176 grams (95% CI: 147, 206), Diet 2 has a mean weight of 201 grams (95% CI: 164, 239), Diet 3 has the highest mean weight at 256 grams (95% CI: 218, 293), and Diet 4 has a mean weight of 232 grams (95% CI: 193, 271). This adjustment controls for any variation in initial birth weight, providing a clearer picture of the effect of diet on final weight.
+
+In summary, Diet 3 yields the highest average weight on Day 20, suggesting it may be the most effective for promoting weight gain. Conversely, Diet 1 results in the lowest adjusted mean weight. The confidence intervals for each group indicate the range within which we expect the true mean weight to fall, at a 95% confidence level. Further pairwise comparisons between diet groups could be performed to determine whether the differences in adjusted means between specific diets are statistically significant.
+
+```{r 1d}
+# Get birth weight data for each chick at time = 0
+birth_weight <- ChickWeight[ChickWeight$Time == 0, c("Chick", "weight")]
+colnames(birth_weight)[2] <- birth_weight
+
+# Merge birth weight with Day 20 data
+day20_data <- merge(day20_data, birth_weight, by = "Chick")
+
+# Perform ANCOVA
+ancova_model <- aov(weight ~ Diet + birth_weight, data = day20_data)
+
+# Summary of the ANCOVA
+summary(ancova_model)
+
+# Load the emmeans package for LS Means
+library(emmeans)
+
+# Calculate LS Means for Diet groups adjusted for birth weight
+lsmeans <- emmeans(ancova_model, ~ Diet)
+lsmeans
+```
+
+
+### Part (c) Check Validity of Assumptions for the ANCOVA Model
+
+•	Linearity: Check if the relationship between birth weight and Day 20 weight is linear within each diet group.
+
+•	Parallelism: The effect of the covariate (birth weight) should be consistent across the diet groups.
+
+•	Normality: Residuals of the model should be normally distributed.
+
+•	Homoscedasticity: Residuals should have constant variance across groups.
+
+•	Independence: Observations should be independent of one another, meaning that the weight of one chick should not influence the weight of another.
+
+```{r 1e}
+# Linearity: Scatter plot for each diet group with a linear regression line
+library(ggplot2)
+ggplot(day20_data, aes(x = birth_weight, y = weight, color = as.factor(Diet))) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +  # Linear regression line
+  labs(title =
+         "Relationship between Birth Weight and Day 20 Weight by Diet Group",
+       x = "Birth Weight", y = "Day 20 Weight") +
+  theme_minimal()
+
+# Parallelism: Test by including interaction term
+ancova_parallel <- aov(weight ~ Diet * birth_weight, data = day20_data)
+summary(ancova_parallel)
+
+# Normality: Q-Q plot and Shapiro-Wilk test for residuals
+plot(ancova_model, which = 2)  # Q-Q plot
+shapiro.test(residuals(ancova_model))  # Shapiro-Wilk test
+
+# Homoscedasticity: Residuals vs Fitted plot and Breusch-Pagan test
+plot(ancova_model, which = 1)  # Residuals vs Fitted plot
+library(lmtest)
+bptest(ancova_model)  # Breusch-Pagan test for homoscedasticity
+
+# Independence: Durbin-Watson test for autocorrelation in residuals
+library(car)
+durbinWatsonTest(ancova_model)
+```
+
+•	Linearity: The relationship between birth weight and Day 20 weight within each diet group was evaluated using scatter plots with linear regression lines. The plots show that some groups have a linear relationship, while others do not exhibit a clear linear trend. This might suggest that the linearity assumption is not fully met for all groups. Further investigation or potential transformations of the covariate (birth weight) could be considered if the non-linearity is significant.
+
+•	Parallelism: The interaction term between diet and birth weight in the ANCOVA model was tested. The p-value for the interaction term is 0.16235, which is greater than 0.05, indicating that the interaction is not significant. Therefore, the parallelism assumption is met, meaning the effect of birth weight on weight gain is consistent across the different diet groups.
+
+•	Normality: The Q-Q plot of the residuals shows that the residuals are approximately normally distributed, as most points lie along the diagonal line. The Shapiro-Wilk test for normality also supports this conclusion, with a p-value of 0.7082, which is greater than 0.05. Therefore, the normality assumption is satisfied.
+
+•	Homoscedasticity: The Residuals vs. Fitted plot shows no clear pattern, suggesting that the variance of residuals is relatively constant across fitted values. The Breusch-Pagan test yields a p-value of 0.1814, which is greater than 0.05, further supporting the assumption of homoscedasticity. Thus, the homoscedasticity assumption is met.
+
+•	Independence: The Durbin-Watson test for autocorrelation in the residuals produces a p-value of 0.08, which is slightly above the 0.05 threshold. This suggests that there is no strong evidence of autocorrelation in the residuals, and the independence assumption is reasonably satisfied. However, given that the p-value is close to the significance level, you may want to monitor this assumption closely, especially if additional data are collected.
+
+Overall, the key assumptions for ANCOVA (linearity, parallelism, normality, homoscedasticity, and independence) are generally satisfied, with some minor concerns regarding linearity in some diet groups and the independence assumption. Based on these results, the ANCOVA model is valid, and the results can be interpreted with confidence.
+
+## Question 2
+
+### Part (a) Bonferroni Method
+
+```{r 2a}
+pairwise.t.test(day20_data$weight,
+                day20_data$Diet, p.adjust.method = "bonferroni")
+```
+
+Using the Bonferroni method to adjust for multiple comparisons, we find that there is only a significant difference between Diet 1 and Diet 3 (p = 0.0027). No other pairwise comparisons show a statistically significant difference after the Bonferroni correction. The Bonferroni adjustment is a conservative method, and the fact that only one comparison is significant after adjustment suggests that other differences are either small or not robust enough to survive this correction for multiple testing.
+
+### Part (b) Tukey Method
+
+```{r 2b}
+# Tukey's HSD test
+tukey_result <- TukeyHSD(anova_no_adjust)
+tukey_result
+```
+
+The Tukey method shows that there is a statistically significant difference between Diet 3 and Diet 1 (p = 0.0025). No other pairwise comparisons show statistically significant differences. Similar to the Bonferroni method, the significant result involves Diet 3 vs Diet 1, and Diet 4 vs Diet 1 is close to significance, but does not reach the 0.05 threshold.
+
+## Question 3
+
+### Part (a) Kruskal-Wallis test
+
+```{r 3a}
+kruskal.test(weight ~ Diet, data = day20_data)
+```
+
+Since the p-value (0.004969) is less than the standard significance level of 0.05, we reject the null hypothesis that all diet groups have the same distribution of weights. This indicates that there are significant differences in weight among the diet groups. The Kruskal-Wallis test is a non-parametric alternative to ANOVA and is used when the assumption of normality may not hold. Therefore, this result suggests that diet does indeed affect the weight, and further pairwise comparisons could be conducted to determine which specific groups differ.
