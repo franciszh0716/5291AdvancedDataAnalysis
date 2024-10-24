@@ -1,0 +1,248 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set ANOVA 1"
+author: "Francis Zhang"
+date: "October 23, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+Consider the ChickWeight data in R. The body weights of the chicks were measured at birth (i.e., time=0) and every second day thereafter until day 20. They were also measured on day 21. There were four groups of chicks on different protein diets.​
+
+1.Perform ANCOVA, adjusting for birthweight,  to determine whether there is a significant difference in the mean weights of the four groups using the measurements separately at each time point: Day  10, 18, and 20.​
+
+2.Perform an appropriate repeated measures ANOVA, adjusting for birthweight, to determine whether there is a significant difference in the mean weights of the four diet groups using the measurements on Days  10, 18, and 20. ​ (Make sure to treat the "Chick" and "Time" variables as unordered factors.)
+
+- Do the analyses assuming compound symmetry and unstructured covariance structures and compare the results ​
+repeated measures.
+
+3.Check the validity of your assumptions in each case, and comment on the approaches used in 1 and 2 above.
+
+## Solution
+
+### Question 1
+
+``` {r 1}
+# Load dataset
+data("ChickWeight")
+
+# Filter for each time point and merge birth weight data
+timepoints <- c(10, 18, 20)
+
+birth_weight <- ChickWeight[ChickWeight$Time == 0, c("Chick", "weight")]
+colnames(birth_weight)[2] <- "birth_weight"
+
+for (time in timepoints) {
+  # Filter data for the specific time point
+  day_data <- subset(ChickWeight, Time == time)
+  day_data <- merge(day_data, birth_weight, by = "Chick")
+
+  # Perform ANCOVA
+  ancova_model <- aov(weight ~ Diet + birth_weight, data = day_data)
+  print(paste("Results for Day", time))
+  print(summary(ancova_model))
+}
+```
+
+•	Day 10:
+
+•	The effect of the Diet is statistically significant (p = 0.00115). This suggests that there is a significant difference in the mean weights of the chicks across the four diet groups on Day 10, after adjusting for birth weight.
+
+•	Birth weight is not a significant covariate (p = 0.71908), meaning that on Day 10, the initial weight of the chicks does not significantly influence their weight after adjusting for diet.
+
+•	Day 18:
+
+•	The effect of the Diet remains statistically significant (p = 0.00623), indicating that there is still a significant difference in the mean weights across diet groups on Day 18.
+
+•	Birth weight is again not significant (p = 0.12818), suggesting that the initial weight is not a major determinant of the weight differences between diet groups at this time point.
+
+•	Day 20:
+
+•	The effect of Diet is also statistically significant (p = 0.00261), meaning that the diet groups continue to show significant differences in weight at this later time point.
+
+•	Birth weight is not significant (p = 0.16447), similar to the previous days, indicating that the initial weight does not significantly affect the final weight at Day 20 after adjusting for diet.
+
+Overall Conclusion:
+
+Across Days 10, 18, and 20, the diet consistently shows a statistically significant effect on the body weight of the chicks, meaning that the different protein diets lead to significant differences in weight. However, birth weight does not significantly affect the weight at any time point after adjusting for the diet. This suggests that diet is the main driver of weight differences between the groups, independent of the initial weight of the chicks.
+
+### Question 2
+
+#### Compound Symmetry Model:
+
+We will use the gls() function from the nlme package to fit the repeated measures model under the assumption of compound symmetry.
+
+``` {r 2a}
+library(nlme)
+
+# Prepare data for repeated measures
+repeat_data <- subset(ChickWeight, Time %in% c(10, 18, 20))
+repeat_data <- merge(repeat_data, birth_weight, by = "Chick")
+repeat_data$Time <- as.factor(repeat_data$Time)
+
+# Fit the model with compound symmetry
+cs_model <- gls(weight ~ Diet + birth_weight,
+                correlation = corCompSymm(form = ~ 1 | Chick),
+                data = repeat_data)
+summary(cs_model)
+
+# Perform ANOVA
+anova(cs_model)
+```
+
+The compound symmetry model assumes that the correlations between measurements taken at different time points are equal and the variances across time points are the same.
+
+•	The diet variable shows a statistically significant effect on weight (F = 6.0069, p = 0.0007), indicating that the four diet groups differ in their effects on chick weight.
+
+•	Birth weight is not statistically significant (p = 0.1875), suggesting that after accounting for diet, birth weight does not significantly influence the weight at the three time points.
+
+•	The rho value (0.12836) from the compound symmetry correlation structure suggests a modest correlation between measurements within the same chicks.
+
+From these results, we conclude that different diets lead to significant weight differences, while birth weight does not significantly affect the outcomes. The assumption of equal correlation between time points (compound symmetry) is used in this model, which may not fully capture the variability between time points.
+
+#### Unstructured Covariance Model:
+
+Fit the repeated measures model assuming an unstructured covariance matrix, which allows for a different covariance for each pair of time points.
+
+``` {r 2b}
+# Convert Time to numeric for correlation structure
+repeat_data$Time <- as.numeric(repeat_data$Time)
+
+# Fit the model with unstructured covariance
+unstruct_model <- gls(weight ~ Diet + birth_weight,
+                      correlation = corSymm(form = ~ Time | Chick),
+                      weights = varIdent(form = ~ 1 | Time),
+                      data = repeat_data)
+summary(unstruct_model)
+
+# Perform ANOVA
+anova(unstruct_model)
+```
+
+The unstructured covariance model, which allows for a different covariance between each pair of time points, was also fitted:
+
+•	The diet variable remains statistically significant (F = 10.0809, p < 0.0001), confirming the significant effect of diet on weight. The diets differ significantly in their impact on chick weight.
+
+•	Birth weight is not statistically significant here either (p = 0.6316), consistent with the compound symmetry model, indicating that birth weight is not a major factor in weight differences across the three time points.
+
+•	The estimated variances for each time point are different, with greater variability at later time points (Day 20 has a variance estimate of 4.566). This suggests that weight differences between chicks grow larger over time.
+
+•	The log-likelihood for the unstructured model is higher (-640.3022) than for the compound symmetry model (-772.4831), which suggests that the unstructured model provides a better fit to the data.
+
+Comparison of Models:
+
+•	Better Fit: The unstructured covariance model fits the data better than the compound symmetry model, as evidenced by its higher log-likelihood and its ability to account for different variances and covariances between time points.
+	
+•	Diet Effect: In both models, the diet has a significant effect on chick weight, but the unstructured model suggests a stronger effect (with a larger F-value) than the compound symmetry model.
+
+•	Birth Weight: In both models, birth weight is not a significant predictor of weight, indicating that diet is the primary driver of weight differences.
+
+•	Variability over Time: The unstructured model reveals that the variance of weight measurements increases over time, which is important for understanding how weight variability grows as chicks age.
+
+### Question 3
+
+#### For ANCOVA (Question 1):
+
+##### Linearity:
+
+• Assumption: The relationship between the covariate (birth weight) and the dependent variable (weight at different time points) should be linear within each diet group.
+
+•	How to Check: Use Residuals vs Fitted plots to ensure there are no clear patterns indicating non-linearity.
+
+``` {r 3a}
+# Residual plots for ANCOVA at each time point
+for (time in timepoints) {
+  day_data <- subset(ChickWeight, Time == time)
+  day_data <- merge(day_data, birth_weight, by = "Chick")
+
+  ancova_model <- aov(weight ~ Diet + birth_weight, data = day_data)
+
+  # Create dynamic title for each day (excluding Q-Q plot if needed)
+  plot_title <- paste("Residuals vs Fitted for Day", time)
+
+  # Residuals vs Fitted plot
+  plot(ancova_model, which = 1)  # Residuals vs Fitted
+
+  # Add dynamic title
+  title(main = plot_title)
+}
+```
+
+The assumption of linearity between birth weight (covariate) and weight was checked using Residuals vs. Fitted plots, and no clear patterns suggesting non-linearity were found.
+
+##### Homoscedasticity:
+
+•	Assumption: Residuals should have constant variance across groups (homoscedasticity).
+
+•	How to Check: Use Residuals vs Fitted plots. If the plot shows a funnel shape, this indicates heteroscedasticity.
+
+The residuals showed constant variance across groups, as indicated by the residuals plot.
+
+##### Normality of Residuals:
+
+•	Assumption: Residuals should be normally distributed.
+
+•	How to Check: Use a Q-Q plot and the Shapiro-Wilk test to check for normality.
+
+Both Q-Q plots and the Shapiro-Wilk test were performed. The Shapiro-Wilk test returned a p-value of 0.7082, indicating that the residuals were normally distributed.
+
+``` {r 3b}
+# Q-Q Plot for Normality
+plot(ancova_model, which = 2)  # Q-Q Plot
+
+# Shapiro-Wilk test for normality of residuals
+shapiro.test(residuals(ancova_model))
+```
+
+##### Independence:
+
+•	Assumption: Observations (weights) should be independent within each group.
+
+Independence is typically assumed based on the experimental design, and it seems no violations were found here.
+
+#### For Repeated Measures ANOVA (Question 2):
+
+##### Sphericity:
+
+•	Assumption: Sphericity assumes that the variances of the differences between all pairs of time points are equal.
+
+•	How to Check: For mixed models with gls() (as used in Question 2), sphericity is handled by the model, but we can compare models with different covariance structures (e.g., compound symmetry vs. unstructured covariance).
+
+``` {r 3c}
+# Compare models using likelihood ratio tests (ANOVA)
+anova(cs_model, unstruct_model)
+
+# Compare using AIC
+AIC(cs_model, unstruct_model)
+```
+
+This assumption was handled by the models’ covariance structures. We compared the compound symmetry and unstructured covariance models using likelihood ratio tests, and the unstructured model had a significantly better fit.
+
+##### Normality of Residuals:
+
+•	Assumption: Residuals from the repeated measures model should be normally distributed.
+
+•	How to Check: Use a Q-Q plot and the Shapiro-Wilk test for the residuals from the repeated measures ANOVA.
+
+``` {r 3d}
+# Q-Q Plot for normality in repeated measures model
+qqnorm(residuals(cs_model))
+qqline(residuals(cs_model), col = "red")
+
+# Shapiro-Wilk test for normality of residuals
+shapiro.test(residuals(cs_model))
+```
+
+The Q-Q plot shows most residuals align with the normality line, but deviations appear at the extremes. The Shapiro-Wilk test confirms a significant deviation from normality (p = 0.0043), indicating that the residuals are not fully normally distributed, particularly in the tails.
+
+##### Model Fit and Covariance Structure:
+
+•	Assumption: The covariance structure should be appropriate for the data. Compare the compound symmetry and unstructured covariance models using AIC and likelihood ratio tests.
+
+•	How to Check: If the unstructured model has a significantly lower AIC and better fit (based on likelihood ratio tests), it may be the better model for the data.
+
+Based on the comparison of AIC and likelihood ratio tests, the unstructured covariance model provided a significantly better fit to the data than the compound symmetry model, confirming the appropriateness of the chosen model.
