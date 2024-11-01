@@ -1,0 +1,129 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set ANOVA 1"
+author: "Francis Zhang"
+date: "October 31, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+
+Consider the ChickWeight data in R. The body weights of the chicks were measured at birth (i.e., time=0) and every second day thereafter until day 20. They were also measured on day 21. There were four groups of chicks on different protein diets. 
+
+Categorize ‘weight’ as a binary variable, with WeightGroup = 1 (or Low), if weight < 170 g, and 0, Otherwise. 
+
+1.Consider comparing Diet Levels 1 and 2 on Day 21.
+
+a)Determine whether there is association between Diet and WeightGroup, using logistic regression, without adjusting for Birth Weight. Interpret what the estimated parameters denote.
+
+b)Repeat (a) adjusting for Birth Weight. Interpret what the estimated parameters denote.
+
+2.Repeat 1a and 1b for all 4 Diet Levels
+
+3.Repeat 1b (i.e. compare diet levels 1 and 2, adjusting for birthweight) using the L-1 regularized logistic regression
+
+**When using cross validation to choose shrinkage parameter lambda, you will need to change the “nfolds” argument in the cv.glmnet function. The default is 10, but that is too large for a dataset this small. Try cv.glmnet(X, y, nfolds=5) instead.**
+
+## Solution
+
+### Question 1
+
+### Data Preparation
+
+``` {r 1}
+# Load the dataset
+data("ChickWeight")
+
+# Filter for Day 21 only
+day21_data <- subset(ChickWeight, Time == 21)
+
+# Categorize weight as binary (WeightGroup)
+day21_data$WeightGroup <- ifelse(day21_data$weight < 170, 1, 0)
+day21_data
+```
+
+### a) Logistic Regression for Diet Levels 1 and 2 (Without Adjusting for Birth Weight)
+
+``` {r 2}
+# Filter data for Diet levels 1 and 2
+day21_diet12 <- subset(day21_data, Diet %in% c(1, 2))
+day21_diet12
+
+# Fit the logistic regression model without birth weight
+logit_model <- glm(WeightGroup ~ Diet, family = binomial, data = day21_diet12)
+
+# Summary of the model
+summary(logit_model)
+```
+
+The logistic regression analysis indicates that there is no statistically significant association between diet level and being in the low weight group for chicks on Day 21. Specifically, the comparison between Diet 1 and Diet 2 yields a coefficient of -0.8473 for Diet 2, with a p-value of 0.32, implying that the difference is not significant at the conventional 0.05 level.
+
+### b) Logistic Regression for Diet Levels 1 and 2 (Adjusting for Birth Weight)
+
+``` {r 3}
+# Extract birth weight data
+birth_weight <- ChickWeight[ChickWeight$Time == 0, c("Chick", "weight")]
+colnames(birth_weight)[2] <- "birth_weight"
+
+# Merge birth weight with day 21 data for Diet 1 and 2
+day21_diet12_adjusted <- merge(day21_diet12, birth_weight, by = "Chick")
+
+# Fit the logistic regression model adjusting for birth weight
+logit_model_adj <- glm(WeightGroup ~ Diet + birth_weight,
+                       family = binomial, data = day21_diet12_adjusted)
+
+# Summary of the adjusted model
+summary(logit_model_adj)
+```
+
+The logistic regression model adjusting for birth weight indicates that there is no significant difference between Diet 2 and Diet 1 regarding the odds of being in the low weight group on Day 21, as the p-value for Diet 2 is 0.567. Additionally, the birth weight variable does not show a significant impact, with a p-value of 0.218.
+
+### Question 2
+
+``` {r 4}
+# Fit logistic regression for all 4 diet levels
+# without adjusting for birth weight
+logit_model_all <- glm(WeightGroup ~ Diet, family = binomial, data = day21_data)
+summary(logit_model_all)
+
+# Merge birth weight with day 21 data
+day21_data_adjusted <- merge(day21_data, birth_weight, by = "Chick")
+
+# Fit logistic regression for all 4 diet levels adjusting for birth weight
+logit_model_all_adj <- glm(WeightGroup ~ Diet + birth_weight,
+                           family = binomial, data = day21_data_adjusted)
+summary(logit_model_all_adj)
+```
+
+The analysis of the logistic regression models, both with and without adjusting for birth weight, indicates that there is no significant difference between Diet 2, Diet 3, or Diet 4 when compared to Diet 1 in terms of the odds of being in the low weight group on Day 21. While Diet 3 approaches significance with p-values of 0.0597 (unadjusted) and 0.0834 (adjusted), it does not meet the conventional threshold of 0.05. The birth weight variable, when included in the model, also does not show a significant impact (p = 0.5749), suggesting that it does not contribute to the likelihood of being in the low weight group.
+
+### Question 3
+
+``` {r 5}
+library(glmnet)
+
+# Create model matrix and response variable for LASSO
+X <- model.matrix(WeightGroup ~ Diet + birth_weight,
+                  data = day21_diet12_adjusted)[, -1]
+y <- day21_diet12_adjusted$WeightGroup
+
+# Fit LASSO with cross-validation
+lasso_model <- cv.glmnet(X, y, family = "binomial", alpha = 1, nfolds = 5)
+
+# Plot cross-validation curve to choose lambda
+plot(lasso_model)
+
+# Best lambda
+best_lambda <- lasso_model$lambda.min
+print(best_lambda)
+
+# Coefficients at best lambda
+lasso_coefs <- coef(lasso_model, s = best_lambda)
+print(lasso_coefs)
+```
+
+Based on the LASSO regression results, only the intercept remains as a non-zero coefficient when selecting the best lambda (0.1445993), indicating that none of the diet levels or birth weight significantly contribute to predicting the WeightGroup for the data of Diet 1 and 2 after regularization. This suggests that there may be limited predictive power for these features in distinguishing weight categories under this model.
