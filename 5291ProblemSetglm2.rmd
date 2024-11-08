@@ -1,0 +1,138 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set ANOVA 1"
+author: "Francis Zhang"
+date: "November 8, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+
+1.Consider the Valve characteristics data (Display 22.16, Ramsey and Schafer, 2nd Ed).
+
+a)Using an appropriate Poisson model, determine if there is association between valve failure and operator
+
+b)Do Problem Number 24, Page 667, using the R function glm.
+
+2.In each of the above, i.e., 1(a) and 1(b):
+
+a)Interpret the estimated parameters
+
+b)Assess the goodness of fit of the model
+
+3.Repeat 1(b) using the glmnet package and comment on the results.
+
+## Solution
+
+### Question 1
+
+#### a)
+
+``` {r 1a}
+library(Sleuth3)
+
+# Load the valve data
+valvedata <- ex2224
+head(valvedata)
+
+# Poisson model for association between failures and operator
+model_operator <- glm(Failures ~ Operator + offset(log(Time)),
+                      family = poisson(link = "log"),
+                      data = valvedata)
+
+# Summary of the model
+summary(model_operator)
+```
+
+In this Poisson model, the estimated coefficient for Operator is -0.10595, with a standard error of 0.07832 and a p-value of 0.176. Since the p-value is greater than the typical significance level of 0.05, we do not have strong evidence to conclude that the Operator variable is significantly associated with valve failures.
+
+
+#### b)
+
+``` {r 1b}
+# Full Poisson model with all factors
+model_full <- glm(Failures ~ System + Operator + Valve + Size + Mode +
+                    offset(log(Time)),
+                  family = poisson(link = "log"),
+                  data = valvedata)
+
+# Summary of the model
+summary(model_full)
+```
+
+The Poisson regression results indicate that certain factors are significantly associated with valve failure rates. Specifically, the coefficient for operator is -0.26470 with a p-value of 0.00181, suggesting that certain operator types are associated with a lower failure rate. The coefficient for valve is 0.35791 with a p-value of 3.83e-06, indicating that specific valve types are significantly linked to a higher failure rate. Additionally, the coefficient for size is 1.22147 with a p-value of 2.89e-12, showing that larger valve sizes are significantly associated with an increased failure rate.
+
+### Question 2
+
+#### a)
+
+##### 1(a)
+
+In the Poisson regression model for 1(a), where only operator is included as a predictor, the intercept is estimated at -0.79841 with a p-value of 7.43e-07, indicating a statistically significant baseline log failure rate for the reference operator level. This intercept corresponds to an expected failure rate of exp(-0.79841) $\approx$ 0.45 failures per unit of time. However, the coefficient for operator is -0.10595 with a p-value of 0.176, which is not statistically significant. This suggests that, without adjusting for other factors, the type of operator alone does not have a significant impact on the valve failure rate.
+
+##### 1(b)
+
+In the full Poisson regression model for 1(b), which includes system, operator, valve, size, and mode, several factors are significantly associated with valve failure rates. The coefficient for operator is -0.26470 with a p-value of 0.00181, indicating that certain operator types are associated with a lower failure rate when other variables are controlled for. Additionally, valve has a coefficient of 0.35791 with a p-value of 3.83e-06, suggesting that specific valve types are linked to higher failure rates. The size variable has a positive coefficient of 1.22147 with a p-value of 2.89e-12, showing that larger valve sizes significantly increase the failure rate. This analysis highlights the importance of including multiple factors to accurately identify independent associations with valve failures, as controlling for additional factors reveals the significant impact of operator type, valve type, and valve size on failure rates.
+
+#### b)
+
+``` {r 2b1}
+# Check goodness of fit for model_operator
+deviance(model_operator) / df.residual(model_operator)
+
+# Check goodness of fit for model_full
+deviance(model_full) / df.residual(model_full)
+```
+
+The goodness-of-fit checks show that both models exhibit overdispersion, as the deviance-to-degrees-of-freedom ratios are greater than 1. Specifically, the ratio for the model containing only the operator variable is 4.359589, and for the full model with all variables, it is 3.686763. Although the full model’s ratio is slightly lower than that of the operator-only model, both values are significantly greater than 1, indicating that even with all variables included, the model fails to fully capture the data’s variability. So we can try with negative binomial distribution.
+
+``` {r 2b2}
+# Load the MASS package for negative binomial regression
+library(MASS)
+
+# Negative binomial model with only the operator variable
+model_operator_nb <- glm.nb(Failures ~ Operator + offset(log(Time)),
+                            data = valvedata)
+summary(model_operator_nb)
+
+# Negative binomial model with all variables
+model_full_nb <- glm.nb(Failures ~ System + Operator + Valve + Size + Mode +
+                          offset(log(Time)), data = valvedata)
+summary(model_full_nb)
+```
+
+The Negative Binomial models show a clear improvement in fit over the Poisson models, as evidenced by the substantial reduction in both deviance and AIC values. For the operator-only model, the deviance decreases from 385.53 (AIC = 491.99) in the Poisson model to 73.696 (AIC = 277.22) in the Negative Binomial model. In the full model, the deviance decreases from 309.69 (AIC = 426.03) to 73.725 (AIC = 269.84). This reduction indicates that the Negative Binomial model effectively addresses the overdispersion in the data, providing a more appropriate fit for identifying factors associated with valve failure rates.
+
+### Question 3
+
+``` {r 3}
+library(glmnet)
+
+# Create model matrix excluding the intercept for glmnet
+X <- model.matrix(Failures ~ System + Operator + Valve + Size + Mode +
+                    offset(log(Time)), data = valvedata)[, -1]
+y <- valvedata$Failures
+offset_log_time <- log(valvedata$Time)
+
+# Fit LASSO model with cross-validation to select lambda
+set.seed(123)
+cv_model <- cv.glmnet(X, y, family = "poisson", offset = offset_log_time,
+                      alpha = 1, nfolds = 5)
+
+# Best lambda
+best_lambda <- cv_model$lambda.min
+best_lambda
+
+# Fit model at best lambda
+lasso_model <- glmnet(X, y, family = "poisson", offset = offset_log_time,
+                      alpha = 1, lambda = best_lambda)
+
+# Coefficients at best lambda
+coef(lasso_model)
+```
+
+The LASSO regression results indicate that, with the optimal lambda of 0.1365504, the model has selected key predictors for valve failure rates while eliminating the non-significant Mode variable. The variables Valve and Size have positive coefficients (0.24883956 and 0.89369616, respectively), suggesting that higher values of these factors are associated with increased failure rates. In contrast, System and Operator have negative coefficients (-0.06356216 and -0.12716110, respectively), indicating a potential reduction in failure rates associated with these factors. This model highlights Valve and Size as primary contributors to higher failure rates.
