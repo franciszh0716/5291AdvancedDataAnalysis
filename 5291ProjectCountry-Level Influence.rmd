@@ -1,0 +1,222 @@
+---
+title: "5291 Final Project: Country-Level Influence on Engagement Rate and Likes using Hierarchical Linear Models"
+author: "Francis Zhang"
+date: "November 20, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Motivation
+
+From the EDA results (Section 10), we observe that the United States has the highest number of influencers compared to other countries, as shown in the chart. This raises an important question: does the dominance in the number of influencers translate into higher average Engagement_Rate and Likes for influencers in the United States compared to other countries? Additionally, it is worth exploring whether countries with fewer influencers demonstrate unique patterns in these metrics. By analyzing Engagement_Rate and Likes across countries, we aim to uncover potential country-level effects and evaluate whether geographic factors significantly influence these key performance metrics. This study can provide actionable insights into the regional dynamics of influencer performance.
+
+
+## Steps for Analysis
+
+### 1.Data Preparation
+
+1.Ensure the data has the necessary variables:
+
+•	Engagement_Rate: Outcome variable 1.
+
+•	Likes: Outcome variable 2.
+
+•	Country: Grouping variable for hierarchical modeling.
+
+•	Followers and Influence_Score: Predictors.
+
+2.Convert the Country variable to a factor for hierarchical modeling.
+
+``` {r 1}
+# Load the data (replace 'file_path' with the actual file path)
+data <- read.csv("/Users/franciszhang/Downloads/top_insta_influencers_data.csv")
+
+# Load necessary libraries
+library(lme4)
+library(lmerTest)  # For p-values in mixed models
+
+# Function to convert 'k' and 'm' abbreviations to numeric
+convert_to_numeric <- function(x) {
+  as.numeric(ifelse(
+    grepl("k", x), as.numeric(gsub("k", "", x)) * 1e3,
+    ifelse(grepl("m", x), as.numeric(gsub("m", "", x)) * 1e6, x)
+  ))
+}
+
+# Apply to relevant columns
+data$followers <- convert_to_numeric(data$followers)
+data$avg_likes <- convert_to_numeric(data$avg_likes)
+data$new_post_avg_like <- convert_to_numeric(data$new_post_avg_like)
+data$total_likes <- convert_to_numeric(data$total_likes)
+data$posts <- convert_to_numeric(data$posts)
+
+# Remove the percentage symbol and convert to numeric
+data$X60_day_eng_rate <- as.numeric(gsub("%", "", data$X60_day_eng_rate)) / 100
+
+# Now, Engagement_Rate is a numeric value (e.g., 1.39 instead of "1.39%")
+
+# Convert country to a factor if not already
+data$country <- as.factor(data$country)
+
+# Scale predictors for better model convergence
+data$Followers_Scaled <- scale(data$followers)
+data$Influence_Score_Scaled <- scale(data$influence_score)
+
+head(data)
+```
+
+### 2.Model Construction
+
+#### 2.1.Null Model:
+
+• Test whether there is significant variation in Engagement_Rate across countries.
+
+``` {r 2.1}
+# Null model for Engagement Rate
+null_model_eng <- lmer(X60_day_eng_rate ~ 1 + (1 | country), data = data)
+summary(null_model_eng)
+
+# Null model for Average Likes
+null_model_avglikes <- lmer(avg_likes ~ 1 + (1 | country), data = data)
+summary(null_model_avglikes)
+
+# Null model for Total Likes
+null_model_totallikes <- lmer(total_likes ~ 1 + (1 | country), data = data)
+summary(null_model_totallikes)
+```
+
+The country-level variance in Engagement_Rate is negligible (5.16e-05), indicating that geographic factors have minimal influence. Most variability is at the individual level (Residual Variance = 1.05e-03), suggesting engagement rates are relatively consistent across countries. The average engagement rate across countries is small but statistically significant (0.0164, p < 0.001).
+
+For Average_Likes, significant country-level variance (2.265e+11) highlights that geographic factors play a meaningful role. However, individual-level variability is dominant (Residual Variance = 4.609e+12). The average likes across countries is substantial (1.511e+06, p < 0.001), indicating meaningful differences in influencer performance by geography.
+
+Total_Likes shows considerable country-level variance (2.671e+15), with even larger residual variability (7.619e+16). This suggests that while country-specific factors strongly influence total likes, individual characteristics remain the primary drivers. The average total likes is very high (5.451e+08, p < 0.001), demonstrating the scale of influence at a global level.
+
+#### 2.2.Random Intercepts Model
+
+•	Add Followers and Influence_Score as fixed effects to explain Engagement_Rate and Likes.
+
+•	Allow the intercepts to vary by country.
+
+``` {r 2.2}
+# Random intercepts model
+model_eng <- lmer(X60_day_eng_rate ~ Followers_Scaled + Influence_Score_Scaled
+                  + (1 | country), data = data)
+summary(model_eng)
+
+model_avglikes <- lmer(avg_likes ~ Followers_Scaled + Influence_Score_Scaled
+                       + (1 | country), data = data)
+summary(model_avglikes)
+
+model_totallikes <- lmer(total_likes ~ Followers_Scaled + Influence_Score_Scaled
+                         + (1 | country), data = data)
+summary(model_totallikes)
+```
+
+The random intercept variance for Engagement_Rate is negligible (5.524e-05), suggesting minimal differences across countries. Neither Followers (p = 0.470) nor Influence_Score (p = 0.338) significantly predicts Engagement_Rate, indicating that engagement levels are relatively consistent globally and not strongly influenced by these factors.
+
+Significant country-level variance (2.247e+11) indicates geographic differences in Average Likes. Followers is a strong predictor (p < 0.001), with higher follower counts leading to significantly increased average likes. However, Influence_Score is not significant (p = 0.117), suggesting limited impact on likes compared to follower count.
+
+The model for Total Likes highlights a high residual variance (7.479e+16) with no detectable country-level random effects (Variance = 0). Neither Followers (p = 0.0808) nor Influence_Score (p = 0.1368) reaches significance, indicating that total likes are likely driven by other factors beyond those included in the model.
+
+#### 2.3.Random Slopes Model:
+
+•	Allow the effects of Followers and Influence_Score to vary across countries.
+
+``` {r 2.3}
+# Random slopes model
+model_eng_slopes <- lmer(X60_day_eng_rate ~ Followers_Scaled
+                         + Influence_Score_Scaled
+                         + (Followers_Scaled
+                            + Influence_Score_Scaled | country), data = data)
+summary(model_eng_slopes)
+
+model_avglikes_slopes <- lmer(avg_likes ~ Followers_Scaled
+                              + Influence_Score_Scaled
+                              + (Followers_Scaled
+                                 + Influence_Score_Scaled | country),
+                              data = data)
+summary(model_avglikes_slopes)
+
+model_totallikes_slopes <- lmer(total_likes ~ Followers_Scaled
+                                + Influence_Score_Scaled
+                                + (Followers_Scaled
+                                   + Influence_Score_Scaled | country),
+                                data = data)
+summary(model_totallikes_slopes)
+```
+
+The random slopes model for Engagement Rate shows negligible variance in slopes for Followers (3.744e-06) and Influence_Score (3.916e-07) across countries, indicating that these factors have a consistent (non-significant) effect globally. Neither Followers (p = 0.561) nor Influence_Score (p = 0.372) significantly predicts Engagement Rate, further confirming the consistent and minimal impact of these predictors across countries.
+
+For Average Likes, the random slopes for Followers (2.504e+10) and Influence_Score (1.626e+10) indicate some variability in their effects across countries. Followers remains a significant predictor (p = 0.007), while Influence_Score is not (p = 0.219), suggesting that follower counts consistently influence average likes globally, with moderate variability by country.
+
+The random slopes model for Total Likes exhibits substantial variance for Followers (4.246e+15) and Influence_Score (3.681e+15), indicating notable geographic differences in how these factors impact total likes. However, neither Followers (p = 0.078) nor Influence_Score (p = 0.260) is statistically significant in this model, suggesting that other unaccounted factors may drive total likes.
+
+### 3.Model Comparison
+
+Compare models to evaluate the added benefit of including random slopes over random intercepts.
+
+``` {r 3}
+anova(null_model_eng, model_eng, model_eng_slopes)
+
+anova(null_model_avglikes, model_avglikes, model_avglikes_slopes)
+
+anova(null_model_totallikes, model_totallikes, model_totallikes_slopes)
+```
+
+The comparison of models for Engagement Rate indicates no significant improvement when adding fixed effects (Followers and Influence_Score) or allowing their slopes to vary across countries. The random slopes model (AIC = -778.24, p = 0.9797) does not significantly outperform the simpler random intercept model or the null model. This suggests that Engagement Rate is not meaningfully influenced by Followers, Influence_Score, or their variation across countries.
+
+For Average Likes, the model with fixed effects (AIC = 6383.6, p < 0.001) significantly improves upon the null model, indicating that Followers and Influence_Score play a role in explaining variability. However, adding random slopes (AIC = 6392.4, p = 0.944) does not improve the model further, suggesting that the effects of Followers and Influence_Score are consistent across countries.
+
+The models for Total Likes show no significant improvement when adding fixed effects (AIC = 2091.5, p = 0.1145) or random slopes (AIC = 2101.2, p = 0.9987). This indicates that neither Followers nor Influence_Score sufficiently explains variability in total likes, and their effects do not vary meaningfully across countries.
+
+### 4.Extract Variance Components
+
+Evaluate the proportion of variance in the outcome explained at the country level.
+
+``` {r 4}
+summary(model_eng)$varcor
+
+summary(model_avglikes)$varcor
+
+summary(model_totallikes)$varcor
+```
+
+The variance decomposition for Engagement Rate shows a small country-level standard deviation (0.0074) compared to the residual variability (0.0324). This indicates that most of the variability in Engagement Rate is at the individual level, with minimal influence from country-level differences.
+
+For Average Likes, the country-level standard deviation is substantial (474,054), but the residual standard deviation is much larger (1,995,499). This suggests that while country-level factors contribute meaningfully to the variability in average likes, individual-level factors still dominate.
+
+The variance decomposition for Total Likes reveals no detectable country-level variance (0), with all variability attributed to the residual standard deviation (273,475,327). This suggests that geographic factors have no significant impact on total likes, and the differences are entirely driven by individual-level factors.
+
+### 5.Visualize Results
+
+1.Plot the random effects to see country-level variability.
+
+2.Plot predicted engagement rates and likes by country.
+
+``` {r 5}
+# Plot random effects
+library(sjPlot)
+
+# Random effects for Engagement Rate
+plot_model(model_eng, type = "re", show.values = TRUE, value.offset = 0.3,
+           title = "Random Effects: Engagement Rate by Country")
+
+# Random effects for Likes
+plot_model(model_avglikes, type = "re", show.values = TRUE, value.offset = 0.3,
+           title = "Random Effects: Average Likes by Country")
+plot_model(model_totallikes, type = "re", show.values = TRUE,
+           value.offset = 0.3, title = "Random Effects: Total Likes by Country")
+```
+
+The random effects for Engagement Rate reveal minimal variability at the country level, as most random effects are close to zero. This aligns with the earlier findings that Engagement Rate is predominantly influenced by individual-level factors, with little to no geographic differentiation.
+
+For Average Likes, there is notable country-level variability. Countries like Anguilla and Uruguay show positive random effects, indicating higher average likes than the global average. In contrast, countries like Indonesia, Brazil, and France show negative random effects, suggesting lower-than-average performance. This highlights significant geographic differences in the distribution of average likes.
+
+The random effects for Total Likes are uniformly zero across countries, confirming the absence of country-level variance. This indicates that Total Likes are entirely determined by individual-level factors, and geographic characteristics play no role in influencing this outcome.
+
+### Conclusion
+
+Overall, the findings suggest that geographic factors have minimal impact on Engagement Rate, as country-level variance is negligible, and individual-level factors predominantly drive this metric. For Average Likes, country-level differences are significant, with some countries consistently outperforming others, highlighting notable regional disparities. In contrast, Total Likes is entirely determined by individual-level characteristics, with no observable country-level effects, indicating that global audience behaviors, rather than geographic differences, shape this metric. These results emphasize the varying roles of geographic factors across different engagement metrics.

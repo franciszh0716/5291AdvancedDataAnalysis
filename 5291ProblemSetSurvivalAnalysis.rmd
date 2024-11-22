@@ -1,0 +1,129 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set Survival Analysis"
+author: "Francis Zhang"
+date: "November 22, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+Consider the Mayo Clinic Lung Cancer Data in R package survival : data(lung) or data(cancer): including the variables
+
+       inst:       Institution code
+
+       time:       Survival time in days
+
+       status:     censoring status 1=censored, 2=dead
+
+       age:        Age in years
+
+       sex:        Male=1 Female=2, etc.
+
+1.Estimate and plot the survival curve for the combined Male and Female data using the following methods:
+
+a.Kaplan-Meier
+
+b.Fleming-Harrington
+
+2.Estimate the median survival time, using the estimated survival curves from 1a and 1b.
+
+3.Using a log-rank test, compare the survival distributions for Male and Female
+
+## Solution
+
+### Question 1
+
+``` {r 1}
+# Load necessary libraries
+library(survival)
+library(survminer)
+
+# Load the lung dataset
+data(lung)
+head(lung)
+```
+
+#### a.Kaplan-Meier
+
+``` {r 1.a}
+# Create a survival object
+surv_object <- Surv(time = lung$time, event = lung$status == 2)
+
+# Fit the Kaplan-Meier survival model
+km_fit <- survfit(surv_object ~ 1, data = lung)
+summary(km_fit)
+
+# Plot the Kaplan-Meier survival curve
+ggsurvkm <- ggsurvplot(km_fit, conf.int = TRUE,
+                       title = "Kaplan-Meier Survival Curve for Combined Data",
+                       xlab = "Time in Days", ylab = "Survival Probability")
+ggsurvkm
+```
+
+#### b.Fleming-Harrington
+
+``` {r 1.b}
+# Fit the Fleming-Harrington survival model
+fh_fit <- survfit(surv_object ~ 1, type = "fh", data = lung)
+summary(fh_fit)
+
+# Plot the Fleming-Harrington survival curve
+ggsurvfh <- ggsurvplot(fh_fit, conf.int = TRUE, title =
+                         "Fleming-Harrington Survival Curve for Combined Data",
+                       xlab = "Time in Days", ylab = "Survival Probability")
+ggsurvfh
+```
+
+## Question 2
+
+Median survival means half of the people survived at that time. According to the summary tables above, median points should be around 310.
+
+``` {r 2}
+# Kaplan-Meier Median Survival Time:
+km_median <- summary(km_fit)$table["median"]
+km_median
+ggsurvkm$plot +
+  geom_vline(xintercept = km_median, linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = 0.5, linetype = "dotted", color = "red") +
+  annotate("text", x = km_median, y = 0.55, label =
+             paste("Median:", round(km_median, 1)), color = "blue",
+           hjust = -0.1)
+
+# Fleming-Harrington Median Survival Time:
+fh_median <- summary(fh_fit)$table["median"]
+fh_median
+ggsurvfh$plot +
+  geom_vline(xintercept = fh_median, linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = 0.5, linetype = "dotted", color = "red") +
+  annotate("text", x = fh_median, y = 0.55, label =
+             paste("Median:", round(fh_median, 1)), color = "blue",
+           hjust = -0.1)
+```
+
+## Question 3
+
+The log-rank test is used to compare the survival distributions of two samples.
+
+``` {r 3}
+# Convert sex to a factor variable
+lung$sex <- factor(lung$sex, levels = c(1, 2), labels = c("Male", "Female"))
+
+# Fit the Kaplan-Meier survival model by sex
+km_sex_fit <- survfit(surv_object ~ sex, data = lung)
+
+# Plot the Kaplan-Meier survival curves by sex
+ggsurvplot(km_sex_fit, conf.int = TRUE,
+           title = "Kaplan-Meier Survival Curves by Sex",
+           xlab = "Time in Days", ylab = "Survival Probability",
+           legend.title = "Sex", legend.labs = c("Male", "Female"))
+
+# Perform the log-rank test
+log_rank_test <- survdiff(surv_object ~ sex, data = lung)
+log_rank_test
+```
+
+The Kaplan-Meier survival analysis indicates that females tend to have a higher survival probability compared to males over time. The log-rank test confirms a statistically significant difference in survival distributions between males and females ( $\chi^2$ = 10.3 ,  $p$ = 0.001 ), suggesting that sex significantly impacts survival in this dataset.

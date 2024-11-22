@@ -1,5 +1,5 @@
 ---
-title: "GR5291 Advanced Data Analysis Problem Set ANOVA 1"
+title: "GR5291 Advanced Data Analysis Problem Set glm 2"
 author: "Francis Zhang"
 date: "November 8, 2024"
 output: github_document
