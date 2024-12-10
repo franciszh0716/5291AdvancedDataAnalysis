@@ -1,0 +1,82 @@
+---
+title: "GR5291 Advanced Data Analysis Problem Set Survival Analysis 2"
+author: "Francis Zhang"
+date: "December 6, 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question
+
+Consider the Mayo Clinic Lung Cancer Data in R package survival : data(lung) or data(cancer): including the variables
+
+       inst:       Institution code
+
+       time:       Survival time in days
+
+       status:     censoring status 1=censored, 2=dead
+
+       age:        Age in years
+
+       sex:        Male=1 Female=2, etc.
+
+1.Using a Cox proportional hazards model, estimate the hazrad rate for Female relative to Male, without including "age" or other variables in the model
+
+2.Assess the validility of the proportional hazards assumption in (1)
+
+3.Repeat 1, adjusting for "age"
+
+## Solution
+
+### Question 1
+
+### Cox Proportional Hazards Model Without Adjusting for Age
+
+We will estimate the hazard rate for Females relative to Males, using only the sex variable in the model.
+
+``` {r 1}
+# Load required package and data
+library(survival)
+data(lung)
+
+# Fit the Cox Proportional Hazards Model
+cox_model_sex <- coxph(Surv(time, status) ~ sex, data = lung)
+
+# Summarize the model
+summary(cox_model_sex)
+```
+
+The Cox Proportional Hazards model shows that the hazard rate for females (sex = 2) is significantly lower than that for males (sex = 1), with a hazard ratio of 0.588 (95% CI: 0.4237–0.816, p = 0.00149). This indicates that females have approximately 41.2% lower risk of death compared to males. The model’s fit is supported by significant results from the likelihood ratio test (p = 0.001), Wald test (p = 0.001), and log-rank test (p = 0.001), confirming the importance of sex in explaining survival differences.
+
+### Question 2
+
+### Assess the Proportional Hazards Assumption
+
+The proportional hazards assumption can be checked using scaled Schoenfeld residuals.
+
+``` {r 2}
+# Test proportional hazards assumption
+ph_assumption <- cox.zph(cox_model_sex)
+
+# Plot Schoenfeld residuals for sex
+plot(ph_assumption, var = "sex")
+```
+
+The Schoenfeld residuals plot for sex shows that the beta coefficient remains mostly constant over time, with the solid line staying within the confidence bands. However, slight deviations from horizontality, particularly at later times, suggest a potential time-varying effect. The proportional hazards assumption appears approximately valid but may require further investigation for late-time deviations.
+
+### Question 3
+
+### Cox Proportional Hazards Model Adjusting for Age
+
+``` {r 3}
+# Fit the Cox Proportional Hazards Model adjusting for age
+cox_model_sex_age <- coxph(Surv(time, status) ~ sex + age, data = lung)
+
+# Summarize the model
+summary(cox_model_sex_age)
+```
+
+After adjusting for age, the hazard rate for females remains significantly lower compared to males, with a hazard ratio of 0.5986. The effect of age on survival is positive but not statistically significant (p = 0.06459). These results suggest that sex is an independent and significant predictor of survival, even after adjusting for age, with females showing a substantially lower risk of death compared to males.
